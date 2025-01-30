@@ -1,100 +1,104 @@
 local config = require('devtools.config')
-local window = require('devtools.window')
-
 local M = {}
 
--- 存储原始函数
-local original = {
-  notify = vim.notify,
-  notify_once = vim.notify_once,
-  print = vim.print,
-}
+local original_notify = vim.notify
+local original_print = vim.print
 
----@type DevTools.DevToolsConfigStrict
-local current_config = config.default_config
+---log file handler
+---@type file*|nil
+local log_file = nil
 
-local function intercept_message(content, type)
-  table.insert(window.state.messages, {
-    content = content,
-    type = type,
-    timestamp = os.time(),
+---get formatted time string
+---@param format "timestamp"|"datetime"|"custom" time format
+---@param custom_start string custom start string
+---@return string
+local function get_time_string(format, custom_start)
+  if format == 'custom' then
+    return custom_start
+  elseif format == 'timestamp' then
+    return tostring(os.time())
+  else -- datetime
+    return tostring(os.date('%Y-%m-%d %H:%M:%S'))
+  end
+end
+
+---init log file
+local function init_log_file()
+  local mode = config.rewrite and 'w' or 'a'
+  log_file = io.open(config.log_path, mode)
+  if not log_file then
+    error('无法打开日志文件: ' .. config.log_path)
+    return
+  end
+  original_notify('start log file: ' .. config.log_path)
+end
+
+---write log
+---@param content string log content
+local function write_log(content)
+  if not log_file then
+    init_log_file()
+  end
+
+  local time_str = get_time_string(config.entry.present_start_format, config.entry.custom_start)
+
+  if log_file then
+    log_file:write(string.format('[%s] %s\n', time_str, content))
+    log_file:flush()
+  end
+end
+
+---rewrite vim.notify
+---@param msg string msg content
+---@param level? integer log level
+---@param opts? table log options
+function M.override_notify(msg, level, opts)
+  original_notify(msg, level, opts)
+
+  local level_str = level and string.format('[%s]', vim.log.levels[level]) or ''
+  write_log(string.format('%s %s', level_str, msg))
+end
+
+---rewrite vim.print
+---@param ... any
+function M.override_print(...)
+  original_print(...)
+
+  local args = { ... }
+  local str_args = {}
+  for i, v in ipairs(args) do
+    str_args[i] = vim.inspect(v)
+  end
+  write_log(table.concat(str_args, ' '))
+end
+
+---@param opts? DevTools.DevToolsConfig
+function M.setup(opts)
+  config = vim.tbl_deep_extend('force', config, opts or {})
+
+  vim.notify = M.override_notify
+  vim.print = M.override_print
+
+  if config.auto_start then
+    init_log_file()
+  end
+
+  vim.api.nvim_create_autocmd('VimLeavePre', {
+    callback = function()
+      M.cleanup()
+    end,
+    group = vim.api.nvim_create_augroup('DevToolsCleanup', { clear = true }),
   })
-  window.update_content(current_config)
 end
 
-local function setup_interceptors()
-  -- 重写通知函数
-  local notify = function(msg, level, opts)
-    intercept_message(msg, 'notify')
-    return original.notify(msg, level, opts)
+function M.cleanup()
+  if log_file then
+    log_file:close()
+    log_file = nil
   end
 
-  local notify_once = function(msg, level, opts)
-    intercept_message(msg, 'notify_once')
-    return original.notify_once(msg, level, opts)
-  end
-
-  local print = function(...)
-    local args = { ... }
-    intercept_message(args, 'print')
-    return original.print(...)
-  end
-
-  vim.notify = notify
-  vim.notify_once = notify_once
-  vim.print = print
-end
-
-local function create_window()
-  local win
-  if current_config.display_mode == 'float' then
-    win = window.create_float_window(current_config)
-  else
-    win = window.create_split_window(current_config)
-  end
-
-  -- 创建窗口后开始拦截
-  setup_interceptors()
-  return win
-end
-
-local function restore_original()
-  vim.notify = original.notify
-  vim.notify_once = original.notify_once
-  vim.print = original.print
-end
-
----@param user_config? DevTools.DevToolsConfig
-function M.setup(user_config)
-  current_config = vim.tbl_deep_extend('force', config.default_config, user_config or {})
-
-  -- 添加命令
-  vim.api.nvim_create_user_command('DevToolsToggle', function()
-    if window.state.win and vim.api.nvim_win_is_valid(window.state.win) then
-      vim.api.nvim_win_close(window.state.win, true)
-      window.state.win = nil
-      -- 恢复原始函数
-      restore_original()
-    else
-      create_window()
-    end
-  end, {})
-
-  vim.api.nvim_create_user_command('DevToolsClear', function()
-    window.state.messages = {}
-    window.update_content(current_config)
-  end, {})
-
-  -- 设置快捷键
-  if current_config.keymaps.toggle then
-    vim.keymap.set('n', current_config.keymaps.toggle, ':DevToolsToggle<CR>', { silent = true })
-  end
-
-  setup_interceptors()
-end
-
-function M.teardown()
-  restore_original()
+  vim.notify = original_notify
+  vim.print = original_print
 end
 
 return M
