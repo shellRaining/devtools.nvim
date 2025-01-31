@@ -72,12 +72,27 @@ function M.override_print(...)
   write_log(table.concat(str_args, ' '))
 end
 
+---start logging
+function M.start_logging()
+  if not log_file then
+    init_log_file()
+  else
+    original_notify('Log file already started')
+  end
+end
+
 ---@param opts? DevTools.DevToolsConfig
 function M.setup(opts)
   config = vim.tbl_deep_extend('force', config, opts or {})
 
   vim.notify = M.override_notify
   vim.print = M.override_print
+
+  vim.api.nvim_create_user_command('DevToolsStartLog', function()
+    M.start_logging()
+  end, {
+    desc = 'Start DevTools logging',
+  })
 
   if config.auto_start then
     init_log_file()
