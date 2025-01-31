@@ -27,7 +27,7 @@ local function init_log_file()
   local mode = config.rewrite and 'w' or 'a'
   log_file = io.open(config.log_path, mode)
   if not log_file then
-    error('无法打开日志文件: ' .. config.log_path)
+    error('fail to load log file: ' .. config.log_path)
     return
   end
   original_notify('start log file: ' .. config.log_path)
