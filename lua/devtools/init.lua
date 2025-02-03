@@ -81,6 +81,20 @@ function M.start_logging()
   end
 end
 
+---clear log file content
+---@return nil
+function M.clear_log()
+  if log_file then
+    log_file:close()
+  end
+  log_file = io.open(config.log_path, 'w')
+  if not log_file then
+    error('fail to clear log file: ' .. config.log_path)
+    return
+  end
+  original_notify('log file cleared: ' .. config.log_path)
+end
+
 ---@param opts? DevTools.DevToolsConfig
 function M.setup(opts)
   config = vim.tbl_deep_extend('force', config, opts or {})
@@ -92,6 +106,12 @@ function M.setup(opts)
     M.start_logging()
   end, {
     desc = 'Start DevTools logging',
+  })
+
+  vim.api.nvim_create_user_command('DevtoolsClearLog', function()
+    M.clear_log()
+  end, {
+    desc = 'Clear devtools log file content',
   })
 
   if config.auto_start then

@@ -44,4 +44,4 @@ local config = {
 
 ## 使用
 
-你可以通过 `DevToolsStartLog` 命令来启动日志记录
+你可以通过 `DevToolsStartLog` 命令来启动日志记录，通过 `DevtoolsClearLog` 来清空 log 文件

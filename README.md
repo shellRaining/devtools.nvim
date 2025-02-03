@@ -49,4 +49,4 @@ You can use plugin managers like `lazy.nvim` to download this plugin:
 
 ## Usage
 
-You can use the `DevToolsStartLog` command to start logging
+You can use the `DevToolsStartLog` command to start logging, `DevtoolsClearLog` to clear the log file
